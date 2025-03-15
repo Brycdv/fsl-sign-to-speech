@@ -1,9 +1,15 @@
 import streamlit as st
-import pyttsx3
-import random
+from gtts import gTTS
+import os
+import tempfile
+import pygame  # For immediate audio playback
 
-# Placeholder for sign recognition (extended for full Filipino Sign Language alphabet and numbers)
+# Initialize Pygame Mixer for playing audio
+pygame.mixer.init()
+
+# Filipino Sign Language signs and corresponding words
 signs = {
+    "Select a Sign": "",  # Default placeholder
     "A": "Ako", "B": "Bahay", "C": "Cebu", "D": "Dagat", "E": "Elepante", "F": "Filipino",
     "G": "Gatas", "H": "Hangin", "I": "Isda", "J": "Juice", "K": "Kaibigan",
     "L": "Laro", "M": "Mahal", "N": "Nanay", "O": "Oras", "P": "Pamilya",
@@ -14,23 +20,40 @@ signs = {
 }
 
 # AI-generated background descriptions
-themes = {key: f"A background representing '{value}'." for key, value in signs.items()}
+themes = {key: f"A background representing '{value}'." for key, value in signs.items() if key != "Select a Sign"}
 
-# Text-to-Speech function with Filipino voice
+# Function to convert text to speech and play immediately
 def speak(text):
-    engine = pyttsx3.init()
-    voices = engine.getProperty('voices')
-    for voice in voices:
-        if "Filipino" in voice.name or "Tagalog" in voice.name:
-            engine.setProperty('voice', voice.id)
-            break
-    engine.say(text)
-    engine.runAndWait()
+    try:
+        if not text.strip():
+            st.warning("Please enter some text before playing.")
+            return None
 
+        # Generate speech using gTTS
+        tts = gTTS(text=text, lang="tl")  # "tl" for Filipino/Tagalog
+
+        # Save to a temporary file
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as temp_audio:
+            temp_filename = temp_audio.name
+            tts.save(temp_filename)
+
+        # Play the generated speech immediately using pygame
+        pygame.mixer.music.load(temp_filename)
+        pygame.mixer.music.play()
+
+        return temp_filename  # Return the file path
+    except Exception as e:
+        st.error(f"Error generating speech: {e}")
+        return None
+
+# Streamlit UI
 st.title("Filipino Sign Language to Text & Speech")
+
+# Select a sign
 selected_sign = st.selectbox("Choose a Sign:", list(signs.keys()))
 
-if selected_sign:
+# Ensure selected_sign is valid before using it
+if selected_sign and selected_sign != "Select a Sign":
     text_output = signs[selected_sign]
     st.write(f"**Recognized Sign:** {selected_sign}")
     st.write(f"**Converted Text:** {text_output}")
@@ -44,5 +67,10 @@ if selected_sign:
     
     # Button to trigger speech
     if st.button("Speak"):
-        speak(custom_text)
-        st.success("Spoken: " + custom_text)
+        audio_file = speak(custom_text)
+        if audio_file:
+            st.success(f"Spoken: {custom_text}")
+
+            # Optional: Provide a download button for the speech file
+            with open(audio_file, "rb") as f:
+                st.download_button("Download Speech", f, file_name="speech.mp3", mime="audio/mp3")
